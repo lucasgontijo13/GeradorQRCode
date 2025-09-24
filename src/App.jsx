@@ -1,13 +1,13 @@
-// src/App.jsx
-
 import React from 'react';
 import QRCodeGenerator from './QRCodeGenerator';
-import './App.css'; // Opcional, para estilização global se quiser
+import Faq from './components/Faq'
+import './App.css'; 
 
 function App() {
   return (
     <div className="App">
       <QRCodeGenerator />
+      <Faq />
     </div>
   );
 }

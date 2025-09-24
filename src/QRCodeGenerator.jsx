@@ -1,11 +1,9 @@
-// src/QRCodeGenerator.jsx
-
 import React, { useState, useEffect } from 'react';
 import QRCode from 'qrcode';
 import JSZip from 'jszip';
-// Removemos o ícone FiFileText que não será mais usado
-import { FiDownload, FiLoader, FiLink, FiList } from 'react-icons/fi';
+import { FiDownload, FiLoader, FiLink, FiList, FiImage } from 'react-icons/fi';
 import './QRCodeGenerator.css';
+import ScrollIndicator from './components/ScrollIndicator';
 
 function QRCodeGenerator() {
   const [mode, setMode] = useState('single');
@@ -13,31 +11,18 @@ function QRCodeGenerator() {
   const [batchLinks, setBatchLinks] = useState('');
   const [qrCodeUrl, setQrCodeUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState(''); 
   const [validLinkCount, setValidLinkCount] = useState(0);
-
-  // Estado para controlar se o input é um link válido
   const [isUrl, setIsUrl] = useState(false);
 
-  // Função para validar se uma string parece ser uma URL (permanece a mesma)
   const isValidUrl = (string) => {
     if (!string) return false;
-    const urlPattern = new RegExp(
-      '^(https?:\\/\\/)?' + 
-      '((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.)+[a-z]{2,}|' +
-      '((\\d{1,3}\\.){3}\\d{1,3}))' + 
-      '(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*' +
-      '(\\?[;&a-z\\d%_.~+=-]*)?' +
-      '(\\#[-a-z\\d_]*)?$',
-      'i'
-    );
+    const urlPattern = new RegExp('^(https?:\\/\\/)?' + '((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.)+[a-z]{2,}|' + '((\\d{1,3}\\.){3}\\d{1,3}))' + '(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*' + '(\\?[;&a-z\\d%_.~+=-]*)?' + '(\\#[-a-z\\d_]*)?$', 'i');
     return !!urlPattern.test(string);
   };
 
-  // useEffect para fazer a detecção em tempo real (permanece o mesmo)
   useEffect(() => {
-    if (mode === 'single') {
-      setIsUrl(isValidUrl(singleLink));
-    }
+    if (mode === 'single') setIsUrl(isValidUrl(singleLink));
   }, [singleLink, mode]);
 
   const parseLinksFromText = (text) => {
@@ -48,19 +33,14 @@ function QRCodeGenerator() {
   };
 
   useEffect(() => {
-    if (mode === 'batch') {
-      const links = parseLinksFromText(batchLinks);
-      setValidLinkCount(links.length);
-    }
+    if (mode === 'batch') setValidLinkCount(parseLinksFromText(batchLinks).length);
   }, [batchLinks, mode]);
 
   const generateFileName = (url, index) => {
     try {
       const parsedUrl = new URL(url);
       let hostname = parsedUrl.hostname;
-      if (hostname.startsWith('www.')) {
-        hostname = hostname.substring(4);
-      }
+      if (hostname.startsWith('www.')) hostname = hostname.substring(4);
       const keyword = hostname.split('.')[0];
       const cleanKeyword = keyword.slice(0, 20);
       return `${index + 1}_${cleanKeyword}.png`;
@@ -70,13 +50,10 @@ function QRCodeGenerator() {
     }
   };
 
-  const qrOptions = {
-    errorCorrectionLevel: 'H', type: 'image/png', quality: 0.95, margin: 1, scale: 12,
-  };
+  const qrOptions = { errorCorrectionLevel: 'H', type: 'image/png', quality: 0.95, margin: 1, scale: 12 };
 
   const handleGenerateSingle = async () => {
-    // Adicionamos uma verificação extra para segurança
-    if (!singleLink || !isValidUrl(singleLink)) return; 
+    if (!singleLink || !isValidUrl(singleLink)) return;
     try {
       const url = await QRCode.toDataURL(singleLink, qrOptions);
       setQrCodeUrl(url);
@@ -85,13 +62,53 @@ function QRCodeGenerator() {
       alert('Ocorreu um erro ao gerar o QR Code.');
     }
   };
+
+
+  const handleGenerateIndividual = async () => {
+    const links = parseLinksFromText(batchLinks);
+    if (links.length === 0) {
+      alert('Nenhum link válido foi encontrado.'); return;
+    }
+    setIsLoading(true);
+    setLoadingMessage('Gerando imagens...');
+    setQrCodeUrl('');
+
+   
+    const downloadImage = (dataUrl, fileName) => {
+      const linkEl = document.createElement('a');
+      linkEl.href = dataUrl;
+      linkEl.download = fileName;
+      document.body.appendChild(linkEl);
+      linkEl.click();
+      document.body.removeChild(linkEl);
+    };
+
+    try {
   
+      for (const [index, link] of links.entries()) {
+        const fileName = generateFileName(link, index);
+        const dataUrl = await QRCode.toDataURL(link, qrOptions);
+        downloadImage(dataUrl, fileName);
+    
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    } catch (err) {
+      console.error("Erro detalhado:", err);
+      alert('Ocorreu um erro ao gerar as imagens.');
+    } finally {
+      setIsLoading(false);
+      setLoadingMessage('');
+    }
+  };
+
+
   const handleGenerateBatch = async () => {
     const links = parseLinksFromText(batchLinks);
     if (links.length === 0) {
       alert('Nenhum link válido foi encontrado.'); return;
     }
     setIsLoading(true);
+    setLoadingMessage('Compactando .ZIP...');
     setQrCodeUrl('');
     const zip = new JSZip();
     try {
@@ -113,6 +130,7 @@ function QRCodeGenerator() {
       alert('Ocorreu um erro ao gerar o pacote.');
     } finally {
       setIsLoading(false);
+      setLoadingMessage('');
     }
   };
 
@@ -133,62 +151,54 @@ function QRCodeGenerator() {
 
         {mode === 'single' ? (
           <div className="form-group">
-            <input 
-              type="text" 
-              className="form-input"
-              value={singleLink}
-              onChange={(e) => setSingleLink(e.target.value)}
-              // Placeholder volta a ser específico para links
-              placeholder="https://seusite.com"
-            />
-            {/* *** LÓGICA DO HELPER TEXT ATUALIZADA *** */}
+            <input type="text" className="form-input" value={singleLink} onChange={(e) => setSingleLink(e.target.value)} placeholder="https://seusite.com" />
             <div className={`input-helper ${singleLink && !isUrl ? 'error' : (isUrl ? 'success' : '')}`}>
               {!singleLink && 'Insira um link válido para gerar o QR Code.'}
               {singleLink && !isUrl && 'O texto inserido não parece ser um link válido.'}
               {singleLink && isUrl && '✅ Link válido detectado.'}
             </div>
-            {/* *** LÓGICA DO BOTÃO ATUALIZADA *** */}
             <button className="btn-primary" onClick={handleGenerateSingle} disabled={!singleLink || !isUrl}>
-              <FiLink />
-              Gerar QR Code
+              <FiLink /> Gerar QR Code
             </button>
           </div>
         ) : (
           <div className="form-group">
-            <textarea 
-              className="form-textarea"
-              value={batchLinks}
-              onChange={(e) => setBatchLinks(e.target.value)}
-              placeholder="Cole seus links aqui..."
-            />
+            <textarea className="form-textarea" value={batchLinks} onChange={(e) => setBatchLinks(e.target.value)} placeholder="Cole seus links aqui..." />
             <div className={`input-helper ${validLinkCount > 0 ? 'success' : ''}`}>
-              {validLinkCount > 0 
-                ? `✅ ${validLinkCount} link(s) válido(s) detectado(s).` 
-                : "Cole ou digite os links que deseja converter."}
+              {validLinkCount > 0 ? `✅ ${validLinkCount} link(s) válido(s) detectado(s).` : "Cole ou digite os links que deseja converter."}
             </div>
-            <button className="btn-primary" onClick={handleGenerateBatch} disabled={isLoading || validLinkCount === 0}>
-              {isLoading ? (
-                <><FiLoader className="loader-icon" /> Gerando...</>
-              ) : (
-                <><FiList /> Gerar e Baixar .ZIP</>
-              )}
-            </button>
+        
+            <div className="button-group">
+              <button 
+                className="btn-secondary" 
+                onClick={handleGenerateIndividual} 
+                disabled={isLoading || validLinkCount === 0}
+                title="Baixar todos os QR Codes um a um (vários downloads)"
+              >
+                {isLoading && loadingMessage === 'Gerando imagens...' ? <><FiLoader className="loader-icon" /> Gerando...</> : <><FiImage />Gerar e baixar um por um (PNG)</>}
+              </button>
+              <button 
+                className="btn-primary" 
+                onClick={handleGenerateBatch} 
+                disabled={isLoading || validLinkCount === 0}
+                title="Baixar todos os QR Codes dentro de um único arquivo .ZIP"
+              >
+                {isLoading && loadingMessage === 'Compactando .ZIP...' ? <><FiLoader className="loader-icon" /> Gerando...</> : <><FiList /> Gerar e baixar Todos (ZIP)</>}
+              </button>
+            </div>
           </div>
         )}
 
         {qrCodeUrl && mode === 'single' && (
           <div className="qr-preview">
-            <img src={qrCodeUrl} alt="QR Code gerado" style={{maxWidth: '300px', height: 'auto'}} />
-            <a 
-              className="download-link" 
-              href={qrCodeUrl} 
-              // Lógica de nome de arquivo simplificada, pois sempre será um link
-              download={generateFileName(singleLink, 0)}
-            >
-              <FiDownload /> Baixar QR Code
+            <img src={qrCodeUrl} alt="QR Code gerado" style={{ maxWidth: '300px', height: 'auto' }} />
+            <a className="download-link" href={qrCodeUrl} download={generateFileName(singleLink, 0)}>
+              <FiDownload /> Baixar QR Code (PNG)
             </a>
           </div>
         )}
+        
+        <ScrollIndicator />
       </div>
     </div>
   );
